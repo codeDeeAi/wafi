@@ -1,0 +1,109 @@
+#!/usr/bin/php
+<?php
+
+if (php_sapi_name() !== 'cli') {
+    exit;
+}
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Minicli\App;
+use App\Database;
+
+$app = new App();
+$database = new Database();
+
+$app->registerCommand('create-user', function (array $argv) use ($app, $database) {
+    if (!$argv[2]) {
+        $app->getPrinter()->display("A username is required");
+    } else {
+        $name = $argv[2];
+        $balance = isset($argv[3]) ? (float) $argv[3] : 0;
+
+        $status = $database->createUser($name, $balance);
+
+        if (!$status) {
+            $app->getPrinter()->display("Account ($name) exists and cannot be created !!!");
+        } else {
+            $app->getPrinter()->display("Account ($name) created sucessfully !!!");
+        }
+    }
+});
+
+$app->registerCommand('deposit', function (array $argv) use ($app, $database) {
+    if (!$argv[2]) {
+        $app->getPrinter()->display("A username is required");
+    } else if (!$argv[3]) {
+        $app->getPrinter()->display("A valid amount is required");
+    } else {
+        $name = $argv[2];
+        $amount = isset($argv[3]) ? (float) $argv[3] : 0;
+
+        $status = $database->depositAmountToBalance($name, $amount);
+
+        if (!$status) {
+            $app->getPrinter()->display("Account ($name) does not exist !!!");
+        } else {
+            $app->getPrinter()->display("$amount deposited to  Account: ($name) sucessfully !!!");
+        }
+    }
+});
+
+$app->registerCommand('check-balance', function (array $argv) use ($app, $database) {
+    if (!$argv[2]) {
+        $app->getPrinter()->display("A username is required");
+    } else {
+        $name = $argv[2];
+
+        $data = $database->getUserAndBalance($name);
+
+        $app->getPrinter()->display(json_encode($data));
+    }
+});
+
+$app->registerCommand('transfer', function (array $argv) use ($app, $database) {
+    if (!$argv[2]) {
+        $app->getPrinter()->display("Sender username is required");
+    } else if (!$argv[3]) {
+        $app->getPrinter()->display("Reciever username is required");
+    } else if (!$argv[4]) {
+        $app->getPrinter()->display("Amount is required");
+    } else {
+        $sender = $argv[2];
+        $reciever = $argv[3];
+        $amount = (float) $argv[4];
+
+        if (!$database->checkUserExists($sender)) {
+            $app->getPrinter()->display("$sender is not a valid user");
+        } else if (!$database->checkUserExists($reciever)) {
+            $app->getPrinter()->display("$reciever is not a valid user");
+        } else {
+            if (!$database->checkUserHasSufficientBalance($sender, $amount)) {
+                $app->getPrinter()->display("$sender has insufficient funds");
+            } else {
+                $status = $database->transferBalance($sender, $reciever, $amount);
+                if($status){
+                    $app->getPrinter()->display("$sender sent $amount to $reciever successfully !");
+                } else{
+                    $app->getPrinter()->display("Transaction error !");
+                }
+            }
+        }
+    }
+});
+
+$app->registerCommand('--help', function (array $argv) use ($app) {
+    $outputs = [
+        "Opens help, usage:php minicli --help",
+        "Create a new user, usage:php minicli create-user [ account-name ] [ deposit-amount ]",
+        "Deposit amount to user, usage:php minicli deposit [ account-name ] [ deposit-amount ]",
+        "Check user balance, usage:php minicli check-balance [ account-name ]",
+        "Transfer amount to user account, usage:php minicli transfer [ sender-account-name ]  [ reciever-account-name ]  [ amount ]",
+    ];
+
+    foreach ($outputs as $value) {
+        $app->getPrinter()->display("$value");
+    }
+});
+
+$app->runCommand($argv);
